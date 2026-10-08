@@ -1,0 +1,32 @@
+name: Build EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer PyInstaller
+        run: pip install pyinstaller
+
+      - name: Construire le EXE
+        run: pyinstaller --onefile --windowed ton_fichier.py
+
+      - name: Publier le EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-windows
+          path: dist/ton_fichier.exe
